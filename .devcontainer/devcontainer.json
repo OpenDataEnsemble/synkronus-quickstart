@@ -1,0 +1,15 @@
+{
+  "name": "Synkronus Codespace Demo",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "postCreateCommand": "docker compose up -d",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "Synkronus API",
+      "onAutoForward": "notify"
+    }
+  }
+}

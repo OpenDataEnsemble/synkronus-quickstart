@@ -1,0 +1,44 @@
+services:
+  synkronus:
+    image: ghcr.io/opendataensemble/synkronus:latest
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      LOG_LEVEL: "info"
+      DB_CONNECTION: "postgres://synkronus_user:strong_password@db:5432/synkronus?sslmode=disable"
+      # JWT Secret MUST be changed in production! Generate a new one with: openssl rand -base64 32
+      JWT_SECRET: "rcN76PE4cYMYZ9D3iy71eBqHsZ4feddcdAF7Zlsfom0="
+      ADMIN_USERNAME: "please_change_the_username"
+      ADMIN_PASSWORD: "you_really_should_change_the_password_as_well"
+      APP_BUNDLE_PATH: "/app/data/app-bundles"
+      MAX_VERSIONS_KEPT: "2"
+    expose:
+      - "8080" # in case you want to place a proxy, eg. nginx, in front of synkronus
+    volumes:
+      - appdata:/app/data/app-bundles
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:17
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: synkronus_user      
+      POSTGRES_PASSWORD: strong_password # change this!
+      POSTGRES_DB: synkronus
+    volumes:
+       - pgdata:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synkronus_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  appdata:
