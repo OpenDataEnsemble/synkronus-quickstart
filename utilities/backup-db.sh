@@ -82,7 +82,7 @@ fi
 
 # If -o pointed at a directory, write a file inside it
 if [ -d "$OUT" ]; then
-  OUT="$(cd -- "$OUT" && pwd)/synkronus-db-backup-$(date +%Y%m%d-%H%M%S).sql"
+  OUT="$(CDPATH= cd -- "$OUT" && pwd)/synkronus-db-backup-$(date +%Y%m%d-%H%M%S).sql"
 fi
 
 OUT_DIR=$(dirname "$OUT")
