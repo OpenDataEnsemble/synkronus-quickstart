@@ -1,15 +1,16 @@
 services:
   synkronus:
     image: ghcr.io/opendataensemble/synkronus:latest
+    container_name: synkronus
     ports:
       - "8080:8080"
     environment:
       PORT: "8080"
       LOG_LEVEL: "info"
-      DB_CONNECTION: "postgres://synkronus_user:strong_password@db:5432/synkronus?sslmode=disable" # create with ~/create_synk_db demo
-      JWT_SECRET: "rcN76PE4cYMYZ9D3iy71eBqHsZ4feddcdAF7Zlsfom0=" # Generate a new one with: openssl rand -base64 32
-      ADMIN_USERNAME: "please_change_the_username"
-      ADMIN_PASSWORD: "change_the_password_as_well"
+      DB_CONNECTION: "postgres://synkronus_user:im97C1wauDvbHDREP51Vk2OfVeFp092@db:5432/synkronus?sslmode=disable" # create with ~/create_synk_db demo
+      JWT_SECRET: "ib2Xz57D7VQhkmMTWL0AVubCZblH8fvQzUKiEz6T8M" # Generate a new one with: openssl rand -base64 32
+      ADMIN_USERNAME: "admin_0d16c0"
+      ADMIN_PASSWORD: "orK5BcLcpDPamf5OKiYFC0hw"
       MAX_VERSIONS_KEPT: "2"
     expose:
       - "8080" # in case you want to place a proxy, eg. nginx, in front of synkronus
@@ -30,10 +31,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: synkronus_user
-      POSTGRES_PASSWORD: strong_password # change this!
+      POSTGRES_PASSWORD: im97C1wauDvbHDREP51Vk2OfVeFp092 # change this!
       POSTGRES_DB: synkronus
     volumes:
       - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     expose:
       - "5432"
     healthcheck:
