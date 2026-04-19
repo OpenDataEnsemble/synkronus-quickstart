@@ -1,4 +1,4 @@
-name: Test Manual Install (Podman)
+name: Test Quickstart with Podman
 
 on:
   push:
@@ -28,5 +28,3 @@ jobs:
       scenario: installer
       timeout_minutes: 30
     secrets: inherit
-
-

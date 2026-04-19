@@ -1,10 +1,9 @@
-name: Test Manual Install (Docker)
+name: Test Quickstart with Docker runtime
 
 on:
   push:
     branches:
       - main
-      - update-docs
   pull_request:
   workflow_dispatch:
 
