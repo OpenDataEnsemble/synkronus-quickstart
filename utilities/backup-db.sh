@@ -54,7 +54,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if command -v podman >/dev/null 2>&1; then
+if [ -n "${SYNK_RUNTIME:-}" ]; then
+  if ! command -v "$SYNK_RUNTIME" >/dev/null 2>&1; then
+    echo "$0: SYNK_RUNTIME is set to '$SYNK_RUNTIME' but command was not found" >&2
+    exit 1
+  fi
+  RUNTIME="$SYNK_RUNTIME"
+elif command -v podman >/dev/null 2>&1; then
   RUNTIME=podman
 elif command -v docker >/dev/null 2>&1; then
   RUNTIME=docker
@@ -76,7 +82,7 @@ fi
 
 # If -o pointed at a directory, write a file inside it
 if [ -d "$OUT" ]; then
-  OUT="$(CDPATH= cd -- "$OUT" && pwd)/synkronus-db-backup-$(date +%Y%m%d-%H%M%S).sql"
+  OUT="$(cd -- "$OUT" && pwd)/synkronus-db-backup-$(date +%Y%m%d-%H%M%S).sql"
 fi
 
 OUT_DIR=$(dirname "$OUT")
