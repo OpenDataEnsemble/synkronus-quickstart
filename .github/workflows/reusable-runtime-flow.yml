@@ -27,41 +27,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install podman and compose support
-        if: inputs.runtime == 'podman'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y podman podman-compose
-
-      - name: Log in to GHCR (Docker)
-        if: inputs.runtime == 'docker'
-        uses: docker/login-action@v3
+      - name: Setup runtime
+        uses: ./.github/actions/setup-runtime
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to GHCR (Podman)
-        if: inputs.runtime == 'podman'
-        run: |
-          set -euo pipefail
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Verify runtime tooling
-        run: |
-          set -euo pipefail
-          if [ "${{ inputs.runtime }}" = "docker" ]; then
-            command -v docker
-            docker version
-            docker compose version
-          else
-            command -v podman
-            podman --version
-            command -v podman-compose
-            podman-compose version
-            PODMAN_COMPOSE_PROVIDER=podman-compose podman compose version
-          fi
+          runtime: ${{ inputs.runtime }}
+          ghcr-username: ${{ github.actor }}
+          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run runtime scenario flow
         run: |

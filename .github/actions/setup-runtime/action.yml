@@ -1,0 +1,54 @@
+name: Setup Runtime
+description: Install (if needed), authenticate, and verify Docker or Podman tooling.
+
+inputs:
+  runtime:
+    description: Runtime to prepare (docker or podman)
+    required: true
+  ghcr-username:
+    description: Username for GHCR login
+    required: true
+  ghcr-token:
+    description: Token for GHCR login
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install podman and compose support
+      if: inputs.runtime == 'podman'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y podman podman-compose
+
+    - name: Log in to GHCR (Docker)
+      if: inputs.runtime == 'docker'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "${{ inputs.ghcr-token }}" | docker login ghcr.io -u "${{ inputs.ghcr-username }}" --password-stdin
+
+    - name: Log in to GHCR (Podman)
+      if: inputs.runtime == 'podman'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "${{ inputs.ghcr-token }}" | podman login ghcr.io -u "${{ inputs.ghcr-username }}" --password-stdin
+
+    - name: Verify runtime tooling
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ inputs.runtime }}" = "docker" ]; then
+          command -v docker
+          docker version
+          docker compose version
+        else
+          command -v podman
+          podman --version
+          command -v podman-compose
+          podman-compose version
+          PODMAN_COMPOSE_PROVIDER=podman-compose podman compose version
+        fi
