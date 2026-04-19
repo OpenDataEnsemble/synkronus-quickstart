@@ -1,0 +1,30 @@
+name: Test Quickstart with Podman
+
+on:
+  push:
+    branches:
+      - main
+      - update-docs
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  podman-manual-install:
+    uses: ./.github/workflows/reusable-runtime-flow.yml
+    with:
+      runtime: podman
+      scenario: manual
+      timeout_minutes: 25
+    secrets: inherit
+
+  podman-installer-flow:
+    uses: ./.github/workflows/reusable-runtime-flow.yml
+    with:
+      runtime: podman
+      scenario: installer
+      timeout_minutes: 30
+    secrets: inherit

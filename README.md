@@ -6,10 +6,10 @@ Welcome! This repository provides a ready-to-run setup of **ODE: Synkronus**, in
 
 ## Features
 
-* Fully containerized Synkronus server
-* Includes Postgres database
-* Supports local usage and GitHub Codespaces
-* Single named volume for all Synkronus mutable data (`/app/data` in the container)
+- Fully containerized Synkronus server
+- Includes Postgres database
+- Supports local usage and GitHub Codespaces
+- Single named volume for all Synkronus mutable data (`/app/data` in the container)
 
 ---
 
@@ -18,6 +18,7 @@ Welcome! This repository provides a ready-to-run setup of **ODE: Synkronus**, in
 We recommend **Podman** with **podman compose** (or `podman-compose`); the same steps work with Docker and Docker Compose if you prefer.
 
 > **Clean Ubuntu server?** Install the needed tools with:
+>
 > ```bash
 > sudo apt update
 > sudo apt install -y podman podman-compose git
@@ -44,29 +45,33 @@ The installer will:
   - **Yes** → You enter your domain. **Caddy** is placed in front and will automatically obtain and renew a TLS certificate (Let’s Encrypt). No Certbot or manual steps.
   - **No** → You enter this server’s **public IP** or `localhost`:
     - **Public IP** → The installer uses **&lt;ip&gt;.sslip.io** as the hostname so Caddy can still provision a real TLS certificate. You get HTTPS with no domain.
-    - **localhost** → Caddy serves on port 80 only (no TLS), for local testing.
+    - **localhost** → Caddy serves local HTTP on host port `8081` (container port `80`, no TLS), for local testing.
 
-The script prints admin username and password (save them). Once the server is up, log in with those credentials and you can create new users from the UI. Use **https://your-domain/** or **https://&lt;your-ip&gt;.sslip.io/** (with TLS), or **http://localhost/** for local-only.
+The script prints admin username and password (save them). Once the server is up, log in with those credentials and you can create new users from the UI. Use **https://your-domain/** or **https://&lt;your-ip&gt;.sslip.io/** (with TLS), or **http://localhost:8081/** for local-only.
 
-> **Note:** If you don't see the portal but get a certificate error instead, try restarting Caddy: `podman restart synkronus_caddy`.  
+In localhost mode, **Caddy** listens on **http://localhost:8081/** and reverse-proxies to **Synkronus** on **http://localhost:8080/**. The Synkronus port stays published on `8080` so you can still hit the backend directly for checks like `curl http://localhost:8080/health`.
+
+> **Podman rootless note:** rootless Podman cannot bind privileged host ports (<1024) unless you change system settings. The installer's localhost mode uses host port `8081` to avoid this.
+
+> **Note:** If you don't see the portal but get a certificate error instead, try restarting Caddy: `podman restart synkronus_caddy`.
 > On first boot, Caddy requests a Let's Encrypt certificate; validation can occasionally fail on the first attempt if the endpoint is not yet reachable. If HTTPS still isn't ready after a minute, check the Caddy logs and restart the Caddy container once.
 
 ### Data storage layout
 
 Synkronus stores mutable files under **`/app/data`** in the container (one volume: `appdata`). You do **not** set `DATA_DIR` or `APP_BUNDLE_PATH` for the default layout. Subdirectories are:
 
-| Path in volume | Purpose |
-|----------------|---------|
-| `app-bundle/active/` | Current app bundle (extracted) |
+| Path in volume         | Purpose                                 |
+| ---------------------- | --------------------------------------- |
+| `app-bundle/active/`   | Current app bundle (extracted)          |
 | `app-bundle/versions/` | Numbered versions and `CURRENT_VERSION` |
-| `attachments/` | Attachment blobs |
+| `attachments/`         | Attachment blobs                        |
 
 ### Utilities (`utilities/`)
 
-| Script | When to use |
-|--------|-------------|
-| [`utilities/backup-attachments.sh`](./utilities/backup-attachments.sh) | Copy attachment blobs **from a running** Synkronus container to the host (see `--help`). |
-| [`utilities/backup-db.sh`](./utilities/backup-db.sh) | **`pg_dump`** the Postgres DB to a `.sql` file while **`db` / `postgres`** is running (see `--help`). |
+| Script                                                                         | When to use                                                                                                                |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| [`utilities/backup-attachments.sh`](./utilities/backup-attachments.sh)         | Copy attachment blobs **from a running** Synkronus container to the host (see `--help`).                                   |
+| [`utilities/backup-db.sh`](./utilities/backup-db.sh)                           | **`pg_dump`** the Postgres DB to a `.sql` file while **`db` / `postgres`** is running (see `--help`).                      |
 | [`utilities/migrate-synkronus-data.sh`](./utilities/migrate-synkronus-data.sh) | Migrate bundle folder layout on the **volume**; run with the **stack stopped** (see [upgrade-path.md](./upgrade-path.md)). |
 
 ---
@@ -82,13 +87,13 @@ cd synkronus-quickstart
 
 2. Adjust env variables in `docker-compose.yml`.
 
-  - In the postgres service:
-    - `POSTGRES_PASSWORD`
-  - In the synkronus service:
-    - `DB_CONNECTION` (update to match `POSTGRES_PASSWORD`)
-    - `JWT_SECRET` (generate a new one with: `openssl rand -base64 32`)
-    - `ADMIN_USERNAME`
-    - `ADMIN_PASSWORD`
+- In the postgres service:
+  - `POSTGRES_PASSWORD`
+- In the synkronus service:
+  - `DB_CONNECTION` (update to match `POSTGRES_PASSWORD`)
+  - `JWT_SECRET` (generate a new one with: `openssl rand -base64 32`)
+  - `ADMIN_USERNAME`
+  - `ADMIN_PASSWORD`
 
 Optionally map volumes to specific mount points on the host (ensure the Synkronus user can write: UID **1000** in the official image).
 
@@ -108,13 +113,13 @@ Optionally map volumes to specific mount points on the host (ensure the Synkronu
    chmod +x ./create_sync_db.sh
    ```
 
-   Then run the script to create the Synkronus database and user:
+   Then run the script to create the Synkronus database and user, providing a short name for the database (e.g. `myorg`):
 
    ```bash
-   ./create_sync_db.sh
+   ./create_sync_db.sh <username>
    ```
 
-   The script will connect to the running `db` container and set up the required database and user account.
+   Replace `<username>` with a short identifier (e.g. `myorg`). The script will connect to the running `db` container and set up the required database and user account.
 
 4. Start the services:
 
@@ -154,7 +159,7 @@ curl <forwarded-url>/health
 
 > Notes:
 >
-> * Perfect for experimenting or as a base for production setups.
+> - Perfect for experimenting or as a base for production setups.
 
 ---
 

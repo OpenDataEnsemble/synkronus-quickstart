@@ -1,0 +1,61 @@
+name: Test Upgrade Path
+
+on:
+  push:
+    branches:
+      - main
+      - update-docs
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  upgrade-path-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROJECT_NAME: upgrade-path-docker
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup runtime
+        uses: ./.github/actions/setup-runtime
+        with:
+          runtime: docker
+          ghcr-username: ${{ github.actor }}
+          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run upgrade-path migration test (docker)
+        run: |
+          set -euo pipefail
+          chmod +x ./.github/scripts/upgrade-path-flow.sh
+          ./.github/scripts/upgrade-path-flow.sh docker "$PROJECT_NAME"
+
+  upgrade-path-podman:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PROJECT_NAME: upgrade-path-podman
+      PODMAN_COMPOSE_PROVIDER: podman-compose
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup runtime
+        uses: ./.github/actions/setup-runtime
+        with:
+          runtime: podman
+          ghcr-username: ${{ github.actor }}
+          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run upgrade-path migration test (podman)
+        run: |
+          set -euo pipefail
+          chmod +x ./.github/scripts/upgrade-path-flow.sh
+          ./.github/scripts/upgrade-path-flow.sh podman "$PROJECT_NAME"
