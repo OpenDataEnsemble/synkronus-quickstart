@@ -14,70 +14,19 @@ permissions:
 
 jobs:
   docker-manual-install:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    uses: ./.github/workflows/reusable-runtime-flow.yml
+    with:
+      runtime: docker
+      scenario: manual
+      timeout_minutes: 20
+    secrets: inherit
 
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+  docker-installer-flow:
+    uses: ./.github/workflows/reusable-runtime-flow.yml
+    with:
+      runtime: docker
+      scenario: installer
+      timeout_minutes: 25
+    secrets: inherit
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify docker runtime
-        run: |
-          set -euo pipefail
-          command -v docker
-          docker version
-          docker compose version
-
-      - name: Run manual install flow with docker
-        run: |
-          set -euo pipefail
-
-          cleanup() {
-            docker compose down -v || true
-          }
-          trap cleanup EXIT
-
-          echo "=== STEP 1: start db ==="
-          docker compose up db -d
-
-          echo "=== STEP 2: wait for postgres ==="
-          for i in $(seq 1 30); do
-            if docker exec postgres pg_isready -U synkronus_user -d postgres -q 2>/dev/null; then
-              echo "postgres ready after ${i}s"
-              break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "postgres did not become ready" >&2
-              exit 1
-            fi
-            sleep 1
-          done
-
-          echo "=== STEP 3: create org database ==="
-          chmod +x ./create_sync_db.sh
-          ./create_sync_db.sh myorg
-
-          echo "=== STEP 4: start full stack ==="
-          docker compose up -d
-
-          echo "=== STEP 5: wait for health ==="
-          for i in $(seq 1 30); do
-            code=$(curl -sS -o /tmp/synk-health-body.txt -w '%{http_code}' --max-time 10 http://localhost:8080/health || true)
-            if [ "$code" = "200" ]; then
-              echo "health_status=$code"
-              cat /tmp/synk-health-body.txt
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "service did not become healthy" >&2
-          docker compose logs
-          exit 1

@@ -14,74 +14,19 @@ permissions:
 
 jobs:
   podman-manual-install:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    uses: ./.github/workflows/reusable-runtime-flow.yml
+    with:
+      runtime: podman
+      scenario: manual
+      timeout_minutes: 25
+    secrets: inherit
 
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+  podman-installer-flow:
+    uses: ./.github/workflows/reusable-runtime-flow.yml
+    with:
+      runtime: podman
+      scenario: installer
+      timeout_minutes: 30
+    secrets: inherit
 
-      - name: Install podman and compose support
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y podman podman-compose
 
-      - name: Log in to GHCR
-        run: |
-          set -euo pipefail
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Verify podman runtime
-        run: |
-          set -euo pipefail
-          command -v podman
-          podman --version
-          podman compose version || podman-compose version
-
-      - name: Run manual install flow with podman
-        run: |
-          set -euo pipefail
-
-          cleanup() {
-            podman compose down -v || true
-          }
-          trap cleanup EXIT
-
-          echo "=== STEP 1: start db ==="
-          podman compose up db -d
-
-          echo "=== STEP 2: wait for postgres ==="
-          for i in $(seq 1 30); do
-            if podman exec postgres pg_isready -U synkronus_user -d postgres -q 2>/dev/null; then
-              echo "postgres ready after ${i}s"
-              break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "postgres did not become ready" >&2
-              exit 1
-            fi
-            sleep 1
-          done
-
-          echo "=== STEP 3: create org database ==="
-          chmod +x ./create_sync_db.sh
-          ./create_sync_db.sh myorg
-
-          echo "=== STEP 4: start full stack ==="
-          podman compose up -d
-
-          echo "=== STEP 5: wait for health ==="
-          for i in $(seq 1 30); do
-            code=$(curl -sS -o /tmp/synk-health-body.txt -w '%{http_code}' --max-time 10 http://localhost:8080/health || true)
-            if [ "$code" = "200" ]; then
-              echo "health_status=$code"
-              cat /tmp/synk-health-body.txt
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "service did not become healthy" >&2
-          podman compose logs
-          exit 1
