@@ -74,8 +74,6 @@ Synkronus stores mutable files under **`/app/data`** in the container (one volum
 | [`utilities/backup-db.sh`](./utilities/backup-db.sh)                           | **`pg_dump`** the Postgres DB to a `.sql` file while **`db` / `postgres`** is running (see `--help`).                      |
 | [`utilities/migrate-synkronus-data.sh`](./utilities/migrate-synkronus-data.sh) | Migrate bundle folder layout on the **volume**; run with the **stack stopped** (see [upgrade-path.md](./upgrade-path.md)). |
 
-Run `chmod +x` on the scripts to make them executable.
-
 ---
 
 ### Local Installation (manual)
