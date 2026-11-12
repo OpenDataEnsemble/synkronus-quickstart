@@ -48,9 +48,11 @@ else
   BOLD=""; GREEN=""; YELLOW=""; RED=""; RESET=""
 fi
 step() { printf '\n%s==>%s %s%s%s\n' "$GREEN" "$RESET" "$BOLD" "$*" "$RESET"; }
-info() { printf '    %s\n' "$*"; }
-warn() { printf '%s[!]%s %s\n' "$YELLOW" "$RESET" "$*"; }
-die()  { printf '\n%s[x] %s%s\n' "$RED" "$*" "$RESET" >&2; exit 1; }
+# Long messages are wrapped so they stay readable in narrow browser consoles.
+wrap() { fold -s -w "${1:-60}"; }
+info() { printf '%s\n' "$*" | wrap 58 | sed 's/^/    /'; }
+warn() { printf '%s[!]%s ' "$YELLOW" "$RESET"; printf '%s\n' "$*" | wrap 58 | sed '2,$s/^/    /'; }
+die()  { printf '\n%s[x] ' "$RED" >&2; printf '%s\n' "$*" | wrap 58 | sed '2,$s/^/    /' >&2; printf '%s' "$RESET" >&2; exit 1; }
 trap 'die "Something went wrong on line $LINENO. Nothing was deleted. Run the same command again, or ask for help and include the lines above."' ERR
 
 usage() {
@@ -252,11 +254,17 @@ info "Using: $RUNTIME"
 step "Writing the configuration to $INSTALL_DIR"
 umask 077
 mkdir -p "$INSTALL_DIR/backups"
+# Data left behind by an earlier installation whose settings were deleted cannot be
+# opened with new passwords, so stop instead of failing later.
+if [ ! -f "$INSTALL_DIR/.env" ] && "$RUNTIME" volume inspect synkronus_pgdata >/dev/null 2>&1; then
+  die "This server has Synkronus data from an earlier installation, but its settings file ($INSTALL_DIR/.env) is gone, so the data cannot be opened. If you don't need that data, remove it with: $RUNTIME volume rm synkronus_pgdata synkronus_appdata   and run the installer again."
+fi
+
 # An earlier attempt that did not finish: keep its secrets, because the database
 # may already have been created with them.
 PREV_DB_PASSWORD=""; PREV_JWT=""
 if [ -f "$INSTALL_DIR/.env" ]; then
-  info "Continuing an earlier installation attempt"
+  info "Reusing the settings from the earlier installation"
   PREV_DB_PASSWORD="$( . "$INSTALL_DIR/.env"; echo "${POSTGRES_PASSWORD:-}")"
   PREV_JWT="$( . "$INSTALL_DIR/.env"; echo "${JWT_SECRET:-}")"
   [ -n "$ADMIN_PASSWORD" ] || ADMIN_PASSWORD="$( . "$INSTALL_DIR/.env"; echo "${ADMIN_PASSWORD:-}")"
@@ -505,9 +513,11 @@ case "${1:-help}" in
     echo "This stops Synkronus and removes it from this server."
     if [ "${2:-}" = "--delete-data" ]; then
       read -r -p "ALL data will be deleted forever. Type DELETE to continue: " ok </dev/tty; [ "$ok" = "DELETE" ] || { echo "Cancelled."; exit 1; }
-      compose down -v || true; rm -rf "$DIR"
+      compose down -v >/dev/null 2>&1 || true; rm -rf "$DIR"
     else
-      compose down || true; echo "Your data and backups are kept in $DIR and in the container volumes."
+      compose down >/dev/null 2>&1 || true; rm -f "$DIR/.installed"
+      echo "Your data and backups are kept in $DIR and in the container volumes."
+      echo "Running the installer again brings Synkronus back with the same data."
     fi
     systemctl disable --now synkronus.service >/dev/null 2>&1 || true
     rm -f /etc/systemd/system/synkronus.service /etc/cron.d/synkronus-backup /usr/local/bin/synkronus
@@ -631,10 +641,10 @@ printf '%s  Your Synkronus server is ready%s\n\n' "$BOLD" "$RESET"
 printf '  Address:         %s%s%s\n' "$BOLD" "$URL" "$RESET"
 printf '  Admin username:  %s%s%s\n' "$BOLD" "$ADMIN_USER" "$RESET"
 printf '  Admin password:  %s%s%s\n\n' "$BOLD" "$ADMIN_PASSWORD" "$RESET"
-printf '  Copy these somewhere safe. They are also saved in\n  %s/CREDENTIALS.txt (show again with: synkronus credentials)\n' "$INSTALL_DIR"
+printf '  Copy these somewhere safe. They are also saved in\n  %s/CREDENTIALS.txt\n  (show them again with: synkronus credentials)\n' "$INSTALL_DIR"
 if [ "$MODE" = "tunnel" ]; then
-  printf '\n  Last step in Cloudflare: in your tunnel, add a Public Hostname\n  with Service type HTTP and URL  caddy:80\n'
+  printf '\n  Last step, in Cloudflare: in your tunnel add a\n  Public Hostname for %s\n  with Service type HTTP and URL  caddy:80\n' "${DOMAIN:-your address}"
 fi
-[ -n "$HTTPS_NOTE" ] && printf '\n  %sNote:%s %s\n' "$YELLOW" "$RESET" "$HTTPS_NOTE"
-printf '\n  Next:\n  1. Open the address in your browser and log in.\n  2. Under Users, create a Read/Write user for your phones.\n  3. Upload your app bundle, then connect Formulus with that user.\n\n  Manage the server with: synkronus help\n'
+[ -n "$HTTPS_NOTE" ] && printf '\n  %sNote:%s %s\n' "$YELLOW" "$RESET" "$(printf '%s' "$HTTPS_NOTE" | fold -s -w 52 | sed '2,$s/^/  /')"
+printf '\n  Next:\n  1. Open the address in your browser and log in.\n  2. Under Users, create a Read/Write user\n     for your phones.\n  3. Upload your app bundle, then connect\n     Formulus with that user.\n\n  Manage the server with: synkronus help\n'
 printf '%s%s%s\n\n' "$GREEN" "$line" "$RESET"
