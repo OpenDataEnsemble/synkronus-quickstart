@@ -353,8 +353,9 @@ EOF
     ;;
   esac
   local tunnel_svc=""
-  local tcmd="tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}"
-  [ "$SYNK_MODE" = "quick" ] && tcmd="tunnel --no-autoupdate --url http://caddy:80"
+  # http2, not the default QUIC: many office and mobile networks block the UDP that QUIC needs.
+  local tcmd="tunnel --no-autoupdate --protocol http2 run --token ${TUNNEL_TOKEN}"
+  [ "$SYNK_MODE" = "quick" ] && tcmd="tunnel --no-autoupdate --protocol http2 --url http://caddy:80"
   if [ "$SYNK_MODE" = "tunnel" ] || [ "$SYNK_MODE" = "quick" ]; then
     tunnel_svc="
   tunnel:
