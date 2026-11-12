@@ -13,6 +13,8 @@
 #   --domain NAME          Your own domain, e.g. data.example.org      (SYNK_DOMAIN)
 #   --ip ADDRESS           Public IP to use if detection is wrong      (SYNK_PUBLIC_IP)
 #   --tunnel-token TOKEN   Use a Cloudflare Tunnel instead of open ports (SYNK_TUNNEL_TOKEN)
+#   --quick-tunnel         Try it out: a free temporary https://....trycloudflare.com
+#                          address, no domain or account needed (SYNK_QUICK_TUNNEL=1)
 #   --local                Local testing only: plain http://localhost  (SYNK_LOCAL=1)
 #   --admin-user NAME      Admin username (default: admin)             (SYNK_ADMIN_USER)
 #   --admin-password PASS  Admin password (default: generated)         (SYNK_ADMIN_PASSWORD)
@@ -30,6 +32,7 @@ INSTALL_DIR="${SYNK_DIR:-/opt/synkronus}"
 DOMAIN="${SYNK_DOMAIN:-}"
 PUBLIC_IP="${SYNK_PUBLIC_IP:-}"
 TUNNEL_TOKEN="${SYNK_TUNNEL_TOKEN:-}"
+QUICK_TUNNEL="${SYNK_QUICK_TUNNEL:-0}"
 LOCAL_ONLY="${SYNK_LOCAL:-0}"
 ADMIN_USER="${SYNK_ADMIN_USER:-admin}"
 ADMIN_PASSWORD="${SYNK_ADMIN_PASSWORD:-}"
@@ -65,6 +68,7 @@ while [ $# -gt 0 ]; do
     --domain) DOMAIN="${2:-}"; shift 2 ;;
     --ip) PUBLIC_IP="${2:-}"; shift 2 ;;
     --tunnel-token) TUNNEL_TOKEN="${2:-}"; shift 2 ;;
+    --quick-tunnel) QUICK_TUNNEL=1; shift ;;
     --local) LOCAL_ONLY=1; shift ;;
     --admin-user) ADMIN_USER="${2:-}"; shift 2 ;;
     --admin-password) ADMIN_PASSWORD="${2:-}"; shift 2 ;;
@@ -158,7 +162,10 @@ detect_ip() {
   return 1
 }
 
-if [ -n "$TUNNEL_TOKEN" ]; then
+if [ "$QUICK_TUNNEL" = "1" ]; then
+  MODE="quick"
+  info "Using a free temporary Cloudflare address. No domain, account or open ports needed."
+elif [ -n "$TUNNEL_TOKEN" ]; then
   MODE="tunnel"
   info "Using a Cloudflare Tunnel. No ports need to be opened on this server."
 elif [ "$LOCAL_ONLY" = "1" ]; then
@@ -186,6 +193,7 @@ case "$MODE" in
   domain|sslip) URL="https://${SITE_HOST}" ;;
   local) URL="http://localhost" ;;
   tunnel) URL="${DOMAIN:+https://$DOMAIN}"; URL="${URL:-(the public hostname you set in Cloudflare)}" ;;
+  quick) URL="(shown when the server is ready)" ;;
 esac
 info "Your server will be at: ${BOLD}${URL}${RESET}"
 
@@ -203,7 +211,7 @@ if [ "$MODE" = "domain" ]; then
 fi
 
 # Ports 80 and 443 must be free for Caddy (not needed with a tunnel).
-if [ "$MODE" != "tunnel" ] && command -v ss >/dev/null; then
+if [ "$MODE" != "tunnel" ] && [ "$MODE" != "quick" ] && command -v ss >/dev/null; then
   for p in 80 443; do
     [ "$MODE" = "local" ] && [ "$p" = "443" ] && continue
     if ss -Hltn "sport = :$p" 2>/dev/null | grep -q .; then
@@ -310,7 +318,7 @@ render() { # writes compose.yml and Caddyfile from .env
   case "$SYNK_MODE" in
     domain|sslip) ports=$'    ports:\n      - "80:80"\n      - "443:443"\n      - "443:443/udp"' ;;
     local) ports=$'    ports:\n      - "80:80"' ;;
-    tunnel) ports="" ;;
+    tunnel|quick) ports="" ;;
   esac
   case "$SYNK_MODE" in
     domain|sslip) cat > "$DIR/Caddyfile" <<EOF
@@ -333,7 +341,7 @@ EOF
 }
 EOF
     ;;
-    tunnel) cat > "$DIR/Caddyfile" <<EOF
+    tunnel|quick) cat > "$DIR/Caddyfile" <<EOF
 # Written by the synkronus command. Cloudflare Tunnel sends traffic here; HTTPS is handled by Cloudflare.
 :80 {
 	encode gzip
@@ -345,12 +353,14 @@ EOF
     ;;
   esac
   local tunnel_svc=""
-  if [ "$SYNK_MODE" = "tunnel" ]; then
+  local tcmd="tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}"
+  [ "$SYNK_MODE" = "quick" ] && tcmd="tunnel --no-autoupdate --url http://caddy:80"
+  if [ "$SYNK_MODE" = "tunnel" ] || [ "$SYNK_MODE" = "quick" ]; then
     tunnel_svc="
   tunnel:
     image: docker.io/cloudflare/cloudflared:latest
     container_name: synkronus-tunnel
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    command: ${tcmd}
     depends_on:
       - caddy
     restart: unless-stopped
@@ -425,6 +435,9 @@ EOF
   chmod 600 "$DIR/compose.yml"
 }
 
+# A quick tunnel gets a new random address each time it starts; read the current one.
+quick_url() { "$RT" logs synkronus-tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1; }
+current_url() { if [ "$SYNK_MODE" = "quick" ]; then quick_url || true; else echo "$SYNK_URL"; fi; }
 healthy() { "$RT" exec synkronus wget -qO- -T 3 http://127.0.0.1:8080/health >/dev/null 2>&1; }
 wait_healthy() { # wait_healthy SECONDS
   local i=0
@@ -467,7 +480,7 @@ restore() {
 
 case "${1:-help}" in
   status)
-    echo "Address:   $SYNK_URL"
+    echo "Address:   $(current_url)"
     echo "Version:   $SYNK_IMAGE"
     if healthy; then echo "Synkronus: running"; else echo "Synkronus: NOT responding (try: synkronus restart, then synkronus logs)"; fi
     "$RT" ps --format '{{.Names}}\t{{.Status}}' 2>/dev/null | grep '^synkronus' | sed 's/^/  /' || true
@@ -476,11 +489,12 @@ case "${1:-help}" in
     echo "Free disk:  $(df -Ph / | awk 'NR==2 {print $4}')"
     ;;
   credentials)
+    if [ "$SYNK_MODE" = "quick" ]; then echo "Current address: $(current_url)  (temporary, changes after a restart)"; fi
     cat "$DIR/CREDENTIALS.txt" 2>/dev/null || { echo "Address: $SYNK_URL"; echo "Admin username: $ADMIN_USERNAME"; echo "Admin password: $ADMIN_PASSWORD"; }
     ;;
-  start) render; up; wait_healthy 120 && echo "Synkronus is running at $SYNK_URL" ;;
+  start) render; up; wait_healthy 120 && echo "Synkronus is running at $(current_url)" ;;
   stop) compose stop >/dev/null 2>&1 || compose stop; echo "Stopped." ;;
-  restart) render; down; up; wait_healthy 120 && echo "Synkronus is running at $SYNK_URL" || { echo "Synkronus did not start. See: synkronus logs"; exit 1; } ;;
+  restart) render; down; up; wait_healthy 120 && echo "Synkronus is running at $(current_url)" || { echo "Synkronus did not start. See: synkronus logs"; exit 1; } ;;
   logs) shift; "$RT" logs --tail "${1:-100}" synkronus 2>&1; echo "--- web server (caddy) ---"; "$RT" logs --tail 20 synkronus-caddy 2>&1 ;;
   backup) backup ;;
   restore) shift; restore "${1:-}" ;;
@@ -489,7 +503,7 @@ case "${1:-help}" in
     old="$("$RT" image inspect --format '{{.Id}}' "$SYNK_IMAGE" 2>/dev/null || true)"
     echo "Downloading the newest version..."; compose pull
     render; down; up
-    if wait_healthy 150; then echo "Updated. Synkronus is running at $SYNK_URL"; "$RT" image prune -f >/dev/null 2>&1 || true
+    if wait_healthy 150; then echo "Updated. Synkronus is running at $(current_url)"; "$RT" image prune -f >/dev/null 2>&1 || true
     else
       echo "The new version did not start. Going back to the previous version..."
       [ -n "$old" ] && "$RT" tag "$old" "$SYNK_IMAGE"; down; up
@@ -512,7 +526,7 @@ case "${1:-help}" in
   uninstall)
     echo "This stops Synkronus and removes it from this server."
     if [ "${2:-}" = "--delete-data" ]; then
-      read -r -p "ALL data will be deleted forever. Type DELETE to continue: " ok </dev/tty; [ "$ok" = "DELETE" ] || { echo "Cancelled."; exit 1; }
+      if [ "${SYNK_YES:-0}" != "1" ]; then read -r -p "ALL data will be deleted forever. Type DELETE to continue: " ok </dev/tty; [ "$ok" = "DELETE" ] || { echo "Cancelled."; exit 1; }; fi
       compose down -v >/dev/null 2>&1 || true; rm -rf "$DIR"
     else
       compose down >/dev/null 2>&1 || true; rm -f "$DIR/.installed"
@@ -578,7 +592,7 @@ chmod 644 /etc/cron.d/synkronus-backup
 command -v cron >/dev/null || apt_install cron >/dev/null 2>&1 || warn "Could not install cron; nightly backups need it."
 
 # Open the firewall if one is active (never turned on by us, so SSH cannot be locked out).
-if [ "$MODE" != "tunnel" ] && command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+if [ "$MODE" != "tunnel" ] && [ "$MODE" != "quick" ] && command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw allow 443/udp >/dev/null
   info "Firewall: opened ports 80 and 443"
 fi
@@ -586,6 +600,16 @@ fi
 # ---------------------------------------------------------------------------
 # 5. Start
 # ---------------------------------------------------------------------------
+# Another program already using our container names would be overwritten or break; stop first.
+for c in synkronus synkronus-db synkronus-caddy synkronus-tunnel; do
+  if "$RUNTIME" container inspect "$c" >/dev/null 2>&1; then
+    proj="$("$RUNTIME" container inspect -f '{{index .Config.Labels "com.docker.compose.project"}}{{index .Config.Labels "io.podman.compose.project"}}' "$c" 2>/dev/null || true)"
+    if [ "$proj" != "synkronus" ]; then
+      die "A container named '$c' already exists on this server and was not created by this installer. To keep it safe, nothing was started. Rename or remove that container, or install on a fresh server."
+    fi
+  fi
+done
+
 step "Starting Synkronus (the first start downloads about 500 MB, please wait)"
 synkronus render
 if [ "$NO_PULL" != "1" ]; then
@@ -604,6 +628,18 @@ done
 info "Synkronus is running."
 
 HTTPS_NOTE=""
+if [ "$MODE" = "quick" ]; then
+  info "Getting your temporary web address from Cloudflare..."
+  URL=""
+  for _ in $(seq 1 40); do
+    URL="$("$RUNTIME" logs synkronus-tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1)" || true
+    [ -n "$URL" ] && break
+    sleep 3
+  done
+  [ -n "$URL" ] || die "Could not get a temporary address from Cloudflare. Check the server's internet connection, then run: synkronus restart"
+  info "Waiting for the address to come online..."
+  for _ in $(seq 1 30); do curl -fsS --max-time 5 "$URL/health" >/dev/null 2>&1 && break; sleep 3; done
+fi
 if [ "$MODE" = "domain" ] || [ "$MODE" = "sslip" ]; then
   info "Getting the HTTPS certificate (up to 2 minutes)..."
   ok=0
@@ -625,7 +661,7 @@ fi
 umask 077
 {
   echo "Synkronus server"
-  echo "Address: $URL"
+  echo "Address: $URL$( [ "$MODE" = quick ] && echo " (temporary: see the current one with synkronus status)")"
   echo "Admin username: $ADMIN_USER"
   echo "Admin password: $ADMIN_PASSWORD"
   echo
@@ -642,6 +678,9 @@ printf '  Address:         %s%s%s\n' "$BOLD" "$URL" "$RESET"
 printf '  Admin username:  %s%s%s\n' "$BOLD" "$ADMIN_USER" "$RESET"
 printf '  Admin password:  %s%s%s\n\n' "$BOLD" "$ADMIN_PASSWORD" "$RESET"
 printf '  Copy these somewhere safe. They are also saved in\n  %s/CREDENTIALS.txt\n  (show them again with: synkronus credentials)\n' "$INSTALL_DIR"
+if [ "$MODE" = "quick" ]; then
+  printf '\n  This address is temporary: it changes when the\n  server restarts (see it with: synkronus status).\n  For a permanent address, use a domain.\n'
+fi
 if [ "$MODE" = "tunnel" ]; then
   printf '\n  Last step, in Cloudflare: in your tunnel add a\n  Public Hostname for %s\n  with Service type HTTP and URL  caddy:80\n' "${DOMAIN:-your address}"
 fi

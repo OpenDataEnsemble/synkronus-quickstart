@@ -60,6 +60,7 @@ Finally, in the tunnel add a *Public hostname* `data.example.org` with service t
 | `--runtime podman\|docker` | Container engine (default `podman`) |
 | `--version TAG` | Synkronus image tag (default `latest`) |
 | `--ip ADDRESS` | Public IP, if detection is wrong |
+| `--quick-tunnel` | Try it out with no domain, account or open ports: a free temporary `https://….trycloudflare.com` address (changes when the server restarts) |
 | `--local` | Local testing only, plain `http://localhost` |
 | `--yes` | Never ask questions (for scripts and cloud-init) |
 
