@@ -2,7 +2,7 @@ services:
   synkronus:
     image: ghcr.io/opendataensemble/synkronus:latest
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080" # this machine only; public traffic goes through Caddy (HTTPS)
     environment:
       PORT: "8080"
       LOG_LEVEL: "info"
