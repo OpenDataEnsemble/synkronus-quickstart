@@ -1,0 +1,41 @@
+name: Reusable Runtime Flow
+
+on:
+  workflow_call:
+    inputs:
+      runtime:
+        required: true
+        type: string
+      scenario:
+        required: true
+        type: string
+      timeout_minutes:
+        required: false
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  run-runtime-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup runtime
+        uses: ./.github/actions/setup-runtime
+        with:
+          runtime: ${{ inputs.runtime }}
+          ghcr-username: ${{ github.actor }}
+          ghcr-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run runtime scenario flow
+        run: |
+          set -euo pipefail
+          chmod +x ./.github/scripts/runtime-flow.sh
+          ./.github/scripts/runtime-flow.sh "${{ inputs.runtime }}" "${{ inputs.scenario }}"

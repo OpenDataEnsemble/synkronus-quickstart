@@ -51,7 +51,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if command -v podman >/dev/null 2>&1; then
+if [ -n "${SYNK_RUNTIME:-}" ]; then
+  if ! command -v "$SYNK_RUNTIME" >/dev/null 2>&1; then
+    echo "$0: SYNK_RUNTIME is set to '$SYNK_RUNTIME' but command was not found" >&2
+    exit 1
+  fi
+  RUNTIME="$SYNK_RUNTIME"
+elif command -v podman >/dev/null 2>&1; then
   RUNTIME=podman
 elif command -v docker >/dev/null 2>&1; then
   RUNTIME=docker
