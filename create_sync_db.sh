@@ -9,6 +9,12 @@ fi
 USERNAME="$1"
 RECREATE=false
 
+# The name is used in SQL identifiers, so allow only lowercase letters, digits and _.
+if [[ ! "$USERNAME" =~ ^[a-z0-9_]+$ ]]; then
+    echo "$0: username may only contain lowercase letters, digits and _ (got '$USERNAME')" >&2
+    exit 1
+fi
+
 if [ "$2" == "--recreate" ]; then
     RECREATE=true
 fi
