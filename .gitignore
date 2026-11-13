@@ -1,3 +1,5 @@
 # Caddy stores TLS certs in Docker volume (caddy_data), not in the repo
 # Optional: add Caddyfile if you prefer not to commit the generated hostname
-# Caddyfile
+Caddyfile
+
+docker-compose.override.yml
