@@ -13,7 +13,80 @@ Welcome! This repository provides a ready-to-run setup of **ODE: Synkronus**, in
 
 ---
 
-## Quick Start
+## One-line installer
+
+The fastest way to a working server with HTTPS. You need a fresh **Ubuntu 24.04** (or Debian 12) server with at least **1 GB of memory**, for example a $6/month DigitalOcean Droplet. Pick the route that fits you; all three use the same installer, `get.sh`.
+
+| Route | Best for | What you do |
+|-------|----------|-------------|
+| **A. Paste one line** (recommended) | Anyone who can open the server's console | Paste the command below and press Enter |
+| **B. No terminal** | People who have never used a command line | Paste [`cloud-init.sh`](./cloud-init.sh) into the "User data" box when you create the server |
+| **C. Cloudflare Tunnel** | Servers without a public IP, or teams already using Cloudflare | Paste the command below with your tunnel token |
+
+**A. Paste one line**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenDataEnsemble/synkronus-quickstart/main/get.sh | sudo bash
+```
+
+It asks one question (your domain, or press Enter for a free `https://<server-ip>.sslip.io` address), then prints your address and admin login.
+
+**B. No terminal:** when creating the server, open *Advanced Options → Add Initialization scripts* (DigitalOcean) or *Cloud config* (Hetzner), paste [`cloud-init.sh`](./cloud-init.sh) after changing the password in it, and create the server. After 5–10 minutes, open `https://<server-ip>.sslip.io` and log in as `admin`.
+
+**C. Cloudflare Tunnel:** in the Cloudflare dashboard go to *Zero Trust → Networks → Tunnels → Create a tunnel* (type Cloudflared), copy the token from the install command it shows, then run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenDataEnsemble/synkronus-quickstart/main/get.sh | sudo bash -s -- --tunnel-token YOUR_TOKEN --domain data.example.org
+```
+
+Finally, in the tunnel add a *Public hostname* `data.example.org` with service type **HTTP** and URL **`caddy:80`**. No ports need to be opened.
+
+### What the installer does
+
+- Uses **Podman** (recommended; installed for you). Docker is used instead if it is already installed or on systems where Podman is too old (pass `--runtime docker` to choose it).
+- Generates all passwords and secrets and saves them in `/opt/synkronus/.env` (root only).
+- Runs PostgreSQL, Synkronus and Caddy. Caddy gets and renews the HTTPS certificate. Synkronus and the database are not reachable from outside.
+- Checks memory, disk, free ports and (for a domain) the DNS record first, and explains any problem in plain words.
+- Adds swap on 1 GB servers, starts everything again after a reboot, and takes a backup every night at 02:00 (kept 7 days).
+- Running it again on the same server changes nothing; it shows the status instead.
+
+### Options
+
+| Option | Meaning |
+|--------|---------|
+| `--domain NAME` | Your own domain (must already point to the server) |
+| `--tunnel-token TOKEN` | Use a Cloudflare Tunnel instead of opening ports 80/443 |
+| `--admin-user NAME` / `--admin-password PASS` | Choose the admin login (default `admin` with a generated password) |
+| `--runtime podman\|docker` | Container engine (default `podman`) |
+| `--version TAG` | Synkronus image tag (default `latest`) |
+| `--ip ADDRESS` | Public IP, if detection is wrong |
+| `--quick-tunnel` | Try it out with no domain, account or open ports: a free temporary `https://….trycloudflare.com` address (changes when the server restarts) |
+| `--local` | Local testing only, plain `http://localhost` |
+| `--yes` | Never ask questions (for scripts and cloud-init) |
+
+Every option can also be given as an environment variable (`SYNK_DOMAIN`, `SYNK_TUNNEL_TOKEN`, `SYNK_ADMIN_PASSWORD`, ...).
+
+### Managing the server
+
+After installing, use the `synkronus` command on the server:
+
+| Command | What it does |
+|---------|--------------|
+| `synkronus status` | Is it running? Address, version, last backup, free disk |
+| `synkronus credentials` | Show the address and admin login again |
+| `synkronus backup` | Back up the database and all files (app bundles, attachments) now |
+| `synkronus restore FILE` | Put back a backup from `/opt/synkronus/backups` |
+| `synkronus update` | Back up, update to the newest version, and roll back if it does not start |
+| `synkronus reset-admin-password` | Set a new admin password and show it |
+| `synkronus logs` | Recent server messages |
+| `synkronus start` / `stop` / `restart` | |
+| `synkronus uninstall` | Remove Synkronus (keeps data unless `--delete-data`) |
+
+After logging in to the Portal, create a separate **Read/Write** user for phones under *Users*, and keep the admin login for yourself.
+
+---
+
+## Quick Start (manual, from a clone)
 
 We recommend **Podman** with **podman compose** (or `podman-compose`); the same steps work with Docker and Docker Compose if you prefer.
 

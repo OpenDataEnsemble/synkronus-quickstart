@@ -68,6 +68,16 @@ if [ ! -f "$COMPOSE_FILE" ]; then
     exit 1
 fi
 
+# Running the installer twice used to print new passwords that were never applied,
+# because the placeholders had already been replaced. Stop early instead.
+if ! grep -q "change_the_password_as_well" "$COMPOSE_FILE"; then
+    echo "ERROR: This server was already set up by install.sh, so nothing was changed."
+    echo "       Your admin login is the one printed the first time install.sh ran"
+    echo "       (ADMIN_USERNAME / ADMIN_PASSWORD in docker-compose.yml)."
+    echo "       To start over completely, restore docker-compose.yml with: git checkout docker-compose.yml"
+    exit 1
+fi
+
 echo "Updating docker-compose.yml with generated credentials..."
 sed -e "s/strong_password/$POSTGRES_PASSWORD/g" \
     -e "s/please_change_the_username/$ADMIN_USERNAME/g" \
